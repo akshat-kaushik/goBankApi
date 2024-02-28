@@ -1,25 +1,44 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"log"
+	"time"
+
+	"github.com/anthdm/micro/client"
+	"github.com/anthdm/micro/proto"
 )
 
 func main() {
-	fmt.Println("Hello, World!")
+	var (
+		jsonAddr = flag.String("json", ":3000", "listen address of the json transport")
+		grpcAddr = flag.String("grpc", ":4000", "listen address of the grpc transport")
+		svc      = loggingService{&priceService{}}
+		ctx      = context.Background()
+	)
+	flag.Parse()
 
-	store,err:=NewPostGresStorage();
-	if err!=nil{
+	grpcClient, err := client.NewGRPCClient(":4000")
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Print(store)
+	go func() {
+		for {
+			time.Sleep(3 * time.Second)
+			resp, err := grpcClient.FetchPrice(ctx, &proto.PriceRequest{Ticker: "BTC"})
+			if err != nil {
+				log.Fatal(err)
+			}
 
-	if err:=store.init(); err!=nil{
-		log.Fatal(err)
+			fmt.Printf("%+v\n", resp)
+		}
+	}()
+
+	go makeGRPCServerAndRun(*grpcAddr, svc)
+
+	jsonServer := NewJSONAPIServer(*jsonAddr, svc)
+	jsonServer.Run()
 }
-
-	server := NewAPIserver(":8080", store)
-	server.Start()
-}
-
